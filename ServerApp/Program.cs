@@ -1,15 +1,24 @@
 var builder = WebApplication.CreateBuilder(args);
 
+if (int.TryParse(Environment.GetEnvironmentVariable("PORT"), out var port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 builder.Services.AddCors();
 builder.Services.AddOutputCache();
 
 var app = builder.Build();
 
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
 app.UseCors(policy =>
     policy.AllowAnyOrigin()
         .AllowAnyMethod()
         .AllowAnyHeader());
 app.UseOutputCache();
+
+app.MapGet("/healthz", () => TypedResults.Ok(new { status = "ok" }));
 
 app.MapGet("/api/productlist", () => new[]
 {
@@ -18,6 +27,8 @@ app.MapGet("/api/productlist", () => new[]
 })
     // Copilot suggested caching this stable, public catalog response.
     .CacheOutput(policy => policy.Expire(TimeSpan.FromMinutes(1)));
+
+app.MapFallbackToFile("index.html");
 
 app.Run();
 

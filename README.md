@@ -13,6 +13,10 @@ dotnet run --project ClientApp/ClientApp.csproj --launch-profile http
 
 Open `http://localhost:5071/fetchproducts`. The API is available at `http://localhost:5068/api/productlist`.
 
+## Deploy on Render
+
+The repository includes a `render.yaml` Blueprint and Dockerfile that publish the Blazor client and Minimal API as one web service. In Render, create a Blueprint from `joelsudical/inventoryhub`, then deploy the detected `inventoryhub` service. Render builds the app and provides the public `onrender.com` URL. The free service may sleep when idle and take longer to respond to its first request.
+
 ## Integration and performance
 
 - The API returns typed product and category records; ASP.NET Core serializes them as camel-case JSON.
