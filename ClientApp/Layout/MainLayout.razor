@@ -1,0 +1,22 @@
+﻿@inherits LayoutComponentBase
+<div class="app-shell">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <div class="main-column">
+        <header class="topbar">
+            <div class="breadcrumbs">
+                <span>Workspace</span>
+                <span class="breadcrumb-divider" aria-hidden="true">/</span>
+                <strong>Inventory</strong>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <article class="content">
+                @Body
+            </article>
+        </main>
+    </div>
+</div>

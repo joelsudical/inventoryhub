@@ -1,0 +1,224 @@
+@page "/fetchproducts"
+@page "/"
+@using ClientApp.Models
+@using ClientApp.Services
+@using System.Text.Json
+@inject ProductService ProductService
+
+<PageTitle>Inventory | InventoryHub</PageTitle>
+
+<section class="inventory-page" aria-labelledby="inventory-title">
+    <header class="page-heading">
+        <div>
+            <div class="page-kicker"><span>OPERATIONS</span><span aria-hidden="true">/</span> CATALOG</div>
+            <h1 id="inventory-title">Inventory</h1>
+            <p>Track product availability, categories, and unit value.</p>
+        </div>
+        <div class="catalog-state @(isLoading ? "catalog-state-loading" : errorMessage is not null ? "catalog-state-error" : string.Empty)">
+            <span aria-hidden="true"></span>
+            @(isLoading ? "Connecting to catalog API" : errorMessage is not null ? "Catalog unavailable" : "Synced with catalog API")
+        </div>
+    </header>
+
+    @if (isLoading)
+    {
+        <div class="loading-panel" role="status">
+            <span class="loading-indicator" aria-hidden="true"></span>
+            <span>Loading inventory</span>
+        </div>
+    }
+    else if (errorMessage is not null)
+    {
+        <section class="message-panel error-panel" role="alert">
+            <span class="message-kicker">CATALOG UNAVAILABLE</span>
+            <h2>We couldn't load inventory.</h2>
+            <p>@errorMessage</p>
+            <button class="action-button" type="button" @onclick="LoadProductsAsync">Try again</button>
+        </section>
+    }
+    else if (products is { Length: > 0 })
+    {
+        var visibleProducts = FilteredProducts;
+
+        <section class="metric-grid" aria-label="Inventory summary">
+            <article class="metric-item metric-featured">
+                <div class="metric-label"><span class="metric-index">01</span>PRODUCTS</div>
+                <div class="metric-value">@products.Length</div>
+                <div class="metric-note">Listed in the catalog</div>
+            </article>
+            <article class="metric-item">
+                <div class="metric-label"><span class="metric-index">02</span>UNITS ON HAND</div>
+                <div class="metric-value">@products.Sum(product => product.Stock)</div>
+                <div class="metric-note">Across all products</div>
+            </article>
+            <article class="metric-item">
+                <div class="metric-label"><span class="metric-index">03</span>LOW STOCK</div>
+                <div class="metric-value metric-warning">@products.Count(product => product.Stock <= LowStockThreshold)</div>
+                <div class="metric-note">At or below @LowStockThreshold units</div>
+            </article>
+            <article class="metric-item">
+                <div class="metric-label"><span class="metric-index">04</span>STOCK VALUE</div>
+                <div class="metric-value metric-currency">@products.Sum(product => product.Price * product.Stock).ToString("C")</div>
+                <div class="metric-note">Based on current unit prices</div>
+            </article>
+        </section>
+
+        <section class="catalog-section" aria-labelledby="catalog-title">
+            <div class="catalog-heading">
+                <div>
+                    <div class="section-overline">PRODUCT DATA</div>
+                    <h2 id="catalog-title">Catalog</h2>
+                </div>
+                <span class="catalog-total">@products.Length @(products.Length == 1 ? "item" : "items")</span>
+            </div>
+
+            <div class="catalog-toolbar">
+                <label class="search-control">
+                    <span class="search-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Search products</span>
+                    <input type="search" placeholder="Search name or category" @bind="searchTerm" @bind:event="oninput" />
+                </label>
+                <label class="category-control">
+                    <span>Category</span>
+                    <select @bind="selectedCategory" aria-label="Filter by category">
+                        <option value="">All categories</option>
+                        @foreach (var category in Categories)
+                        {
+                            <option value="@category">@category</option>
+                        }
+                    </select>
+                </label>
+                <div class="result-count">Showing <strong>@visibleProducts.Length</strong> of @products.Length</div>
+            </div>
+
+            @if (visibleProducts.Length == 0)
+            {
+                <div class="empty-results">
+                    <h3>No matching products</h3>
+                    <p>Try another name or category.</p>
+                    <button class="text-button" type="button" @onclick="ClearFilters">Clear filters</button>
+                </div>
+            }
+            else
+            {
+                <div class="table-scroll">
+                    <table class="product-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">PRODUCT</th>
+                                <th scope="col">CATEGORY</th>
+                                <th scope="col">UNIT PRICE</th>
+                                <th scope="col">ON HAND</th>
+                                <th scope="col">STATUS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var product in visibleProducts)
+                            {
+                                var isLowStock = product.Stock <= LowStockThreshold;
+                                <tr>
+                                    <td data-label="Product">
+                                        <div class="product-identity">
+                                            <span class="product-monogram" aria-hidden="true">@product.Name[..1].ToUpperInvariant()</span>
+                                            <span class="product-name-group">
+                                                <strong>@product.Name</strong>
+                                                <small>Product ID @product.Id</small>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td data-label="Category"><span class="category-tag">@product.Category.Name</span></td>
+                                    <td data-label="Unit price" class="price-cell">@product.Price.ToString("C")</td>
+                                    <td data-label="On hand">
+                                        <div class="stock-cell">
+                                            <strong>@product.Stock <span>units</span></strong>
+                                            <span class="stock-track" aria-hidden="true"><span style="width: @(Math.Min(product.Stock, 100))%"></span></span>
+                                        </div>
+                                    </td>
+                                    <td data-label="Status">
+                                        <span class="stock-status @(isLowStock ? "status-low" : "status-healthy")">
+                                            <span aria-hidden="true"></span>@(isLowStock ? "Low stock" : "In stock")
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            <footer class="table-footer">
+                <span>Inventory source</span>
+                <strong>Product API <span aria-hidden="true">/</span> Updated on request</strong>
+            </footer>
+        </section>
+    }
+    else
+    {
+        <section class="message-panel">
+            <span class="message-kicker">EMPTY CATALOG</span>
+            <h2>No products to show yet.</h2>
+            <p>Products will appear here when they are available from the catalog API.</p>
+        </section>
+    }
+</section>
+
+@code {
+    private const int LowStockThreshold = 30;
+    private Product[]? products;
+    private string? errorMessage;
+    private bool isLoading = true;
+    private string searchTerm = string.Empty;
+    private string selectedCategory = string.Empty;
+
+    private Product[] FilteredProducts => (products ?? Array.Empty<Product>())
+        .Where(product => string.IsNullOrWhiteSpace(searchTerm)
+            || product.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+            || product.Category.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+        .Where(product => string.IsNullOrEmpty(selectedCategory)
+            || string.Equals(product.Category.Name, selectedCategory, StringComparison.Ordinal))
+        .OrderBy(product => product.Name, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    private IEnumerable<string> Categories => (products ?? Array.Empty<Product>())
+        .Select(product => product.Category.Name)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(category => category, StringComparer.OrdinalIgnoreCase);
+
+    protected override Task OnInitializedAsync() => LoadProductsAsync();
+
+    private async Task LoadProductsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            products = await ProductService.GetProductsAsync();
+        }
+        catch (JsonException)
+        {
+            errorMessage = "The product API returned invalid data.";
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode is not null)
+        {
+            errorMessage = $"The product API returned HTTP {(int)exception.StatusCode.Value} ({exception.StatusCode.Value}).";
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Unable to reach the product API. Check that the server is running.";
+        }
+        catch (TaskCanceledException)
+        {
+            errorMessage = "The request to the product API timed out.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        selectedCategory = string.Empty;
+    }
+}
